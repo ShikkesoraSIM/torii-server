@@ -415,7 +415,13 @@ async def submit_score(
                 logger.info("[submit_score] BEFORE _process_user score_id={} user_id={}", score_id, user_id)
                 _process_user_succeeded = False
                 try:
-                    await _process_user(score_id, user_id, redis, fetcher)
+                    # Bound inline user processing to 3.5s so client never hits the 30s timeout
+                    # when beatmaps are slow to download or calculate. If it exceeds 3.5s,
+                    # we return the score immediately and offload the rest to background_task.
+                    await asyncio.wait_for(
+                        _process_user(score_id, user_id, redis, fetcher),
+                        timeout=3.5,
+                    )
                     _process_user_succeeded = True
                     logger.info(
                         "[submit_score] AFTER _process_user in {:.3f}s score_id={} user_id={}",
@@ -423,6 +429,13 @@ async def submit_score(
                         score_id,
                         user_id,
                     )
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "[submit_score] _process_user timed out after 3.5s for score_id={} user_id={} — offloading to background",
+                        score_id,
+                        user_id,
+                    )
+                    _process_user_succeeded = False
                 except Exception as e:
                     logger.warning(
                         "[submit_score] _process_user FAILED in {:.3f}s score_id={} user_id={} err={}",
@@ -460,23 +473,26 @@ async def submit_score(
                 # snapshot under MySQL REPEATABLE READ — a fresh SELECT
                 # won't see the row even though it's committed. We commit
                 # `db` first to refresh the snapshot, then verify.
-                await db.commit()
+                if _process_user_succeeded:
+                    await db.commit()
 
-                try:
-                    leaderboard_row = (
-                        await db.exec(
-                            select(TotalScoreBestScore.score_id).where(
-                                TotalScoreBestScore.score_id == score_id,
+                    try:
+                        leaderboard_row = (
+                            await db.exec(
+                                select(TotalScoreBestScore.score_id).where(
+                                    TotalScoreBestScore.score_id == score_id,
+                                )
                             )
+                        ).first()
+                    except Exception as verify_err:
+                        leaderboard_row = None
+                        logger.warning(
+                            "[submit_score] verify-leaderboard query failed score_id={} err={}",
+                            score_id,
+                            verify_err,
                         )
-                    ).first()
-                except Exception as verify_err:
+                else:
                     leaderboard_row = None
-                    logger.warning(
-                        "[submit_score] verify-leaderboard query failed score_id={} err={}",
-                        score_id,
-                        verify_err,
-                    )
 
                 if not _process_user_succeeded:
                     # The inline call raised — schedule a background pass
@@ -575,7 +591,7 @@ async def _preload_beatmap_for_pp_calculation(beatmap_id: int) -> None:
         redis = get_redis()
 
         # 检查是否已经缓存，避免重复下载
-        cache_key = f"beatmap:raw:{beatmap_id}"
+        cache_key = f"beatmap:{beatmap_id}:raw"
         if await redis.exists(cache_key):
             logger.debug(f"Beatmap {beatmap_id} already cached, skipping preload")
             return
