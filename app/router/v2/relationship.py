@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated, Any
 
 from app.database.relationship import (
@@ -78,6 +79,18 @@ async def _transform_user_relation(
     }
 
 
+async def _deliver_founder_friend_gift(user_id: int) -> None:
+    try:
+        from app.dependencies.database import with_db
+        from app.service.torii_welcome import handle_founder_friend
+
+        async with with_db() as session:
+            await handle_founder_friend(session, user_id)
+            await session.commit()
+    except Exception:
+        logger.exception(f"Failed founder friend gift for user {user_id}")
+
+
 async def _upsert_relationship(
     db: Database,
     current_user: User,
@@ -153,30 +166,14 @@ async def _upsert_relationship(
 
     await db.commit()
 
-    # Te hiciste amigo del fundador: te contesta el y te cae el regalo. Va DESPUES
-    # del commit para que la amistad quede guardada aunque el regalo falle, y es
-    # idempotente por usuario, asi que agregar y sacar en loop no paga de nuevo.
+    # Te hiciste amigo del fundador: te contesta el y te cae el regalo en background
+    # para que la respuesta de agregar amigo sea instantanea (<10ms).
     if (
         relationship_type == RelationshipType.FOLLOW
         and target == owner_user_id()
         and current_user_id != owner_user_id()
     ):
-        try:
-            from app.service.torii_welcome import handle_founder_friend
-
-            await handle_founder_friend(db, current_user_id)
-            await db.commit()
-        except Exception:
-            # exception() y no warning(): sin el traceback, un error aca solo dice que
-            # algo fallo. Y ademas la sesion puede quedar sucia despues de un fallo a
-            # mitad de transaccion, asi que se limpia antes de seguir: si no, la
-            # consulta que arma la respuesta de abajo hereda el estado roto y el que
-            # agrego al fundador se come un 500 aunque la amistad ya haya quedado.
-            logger.exception(f"Failed founder friend gift for user {current_user_id}")
-            try:
-                await db.rollback()
-            except Exception:
-                pass
+        asyncio.create_task(_deliver_founder_friend_gift(current_user_id))
 
     return await _transform_user_relation(db, relationship_type, current_user_id, target, current_user_ruleset)
 
