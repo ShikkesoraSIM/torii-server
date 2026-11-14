@@ -112,6 +112,15 @@ def _apply_relax_reading_cap(payload: dict, mods) -> dict:
     return payload
 
 
+# Mods that only say how a play was made. They change nothing about difficulty, and the
+# calculator is built from a pinned client that may not know them yet.
+_MODS_UNKNOWN_TO_CALCULATOR = {"VR"}
+
+
+def _mods_for_calculator(mods: list[APIMod] | None) -> list[APIMod]:
+    return [m for m in mods or [] if m["acronym"] not in _MODS_UNKNOWN_TO_CALCULATOR]
+
+
 class PerformanceServerPerformanceCalculator(BasePerformanceCalculator):
     def __init__(self, server_url: str = "http://localhost:5225", **kwargs) -> None:  # noqa: ARG002
         self.server_url = server_url
@@ -199,7 +208,7 @@ class PerformanceServerPerformanceCalculator(BasePerformanceCalculator):
                     "checksum": score.map_md5,
                     "accuracy": score.accuracy,
                     "combo": score.max_combo,
-                    "mods": score.mods,
+                    "mods": _mods_for_calculator(score.mods),
                     "statistics": {
                         "great": score.n300,
                         "ok": score.n100,
@@ -261,7 +270,7 @@ class PerformanceServerPerformanceCalculator(BasePerformanceCalculator):
                         # Que estaba mal era solo esta linea: dos abajo ya se usa
                         # to_base_ruleset() para elegir con que parsear la respuesta.
                         "beatmap_file": beatmap_raw,
-                        "mods": mods or [],
+                        "mods": _mods_for_calculator(mods),
                         "ruleset": gamemode.to_base_ruleset().value if gamemode else None,
                     },
                 )
