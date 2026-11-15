@@ -15,6 +15,7 @@ from . import (  # noqa: F401
     ordr_renders,
     password,
     relationship,
+    replay_extras,
     ruleset_report,
     score,
     team,

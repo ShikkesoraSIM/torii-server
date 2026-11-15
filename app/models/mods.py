@@ -186,6 +186,11 @@ DEFAULT_RANKED_MODS = {
         # without constraint.
         "HS": {"bank": {"check": False, "type": "string"}, "use_note_samples": {"check": False, "type": "boolean"}},
         "TD": {},
+        # VR: Torii system mod (osu!std only) which the client adds by itself once a
+        # play uses a VR controller, the way TD marks plays made by touch. It says
+        # how the play was made and nothing else: nothing the difficulty calculator
+        # reads changes, so it stays ranked. No settings.
+        "VR": {},
         "BL": {},   # Blinds
         "NS": {"hidden_combo_count": {"check": False, "type": "number"}},
         "SO": {},

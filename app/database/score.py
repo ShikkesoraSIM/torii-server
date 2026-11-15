@@ -592,6 +592,12 @@ class Score(ScoreModel, table=True):
     def replay_filename(self) -> str:
         return f"replays/{self.id}_{self.beatmap_id}_{self.user_id}_lazer_replay.osr"
 
+    @property
+    def replay_extras_filename(self) -> str:
+        # What a Torii client saved along with the replay (e.g. head and controller
+        # tracking of a play in VR): see app/router/private/replay_extras.py.
+        return f"replay-extras/{self.id}_{self.beatmap_id}_{self.user_id}.osrx"
+
     def get_display_score(self, mode: ScoringMode | None = None) -> int:
         """
         Get the display score for this score based on the scoring mode.
@@ -641,6 +647,7 @@ class Score(ScoreModel, table=True):
             await session.delete(self.playlist_item_score)
 
         await storage_service.delete_file(self.replay_filename)
+        await storage_service.delete_file(self.replay_extras_filename)
         await session.delete(self)
 
 
