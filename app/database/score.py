@@ -1162,10 +1162,18 @@ async def get_user_best_pp_in_beatmap(
 async def calculate_user_pp(session: AsyncSession, user_id: int, mode: GameMode) -> tuple[float, float]:
     pp_sum = 0
     acc_sum = 0
-    bps = await get_user_best_pp(session, user_id, mode)
-    for i, s in enumerate(bps):
-        pp_sum += calculate_weighted_pp(s.pp, i)
-        acc_sum += calculate_weighted_acc(s.acc, i)
+    # solo traemos pp y acc
+    bps = (
+        await session.exec(
+            select(BestScore.pp, BestScore.acc)
+            .where(BestScore.user_id == user_id, BestScore.gamemode == mode)
+            .order_by(col(BestScore.pp).desc())
+            .limit(1000)
+        )
+    ).all()
+    for i, (pp, acc) in enumerate(bps):
+        pp_sum += calculate_weighted_pp(pp, i)
+        acc_sum += calculate_weighted_acc(acc, i)
     if len(bps):
         # https://github.com/ppy/osu-queue-score-statistics/blob/c538ae/osu.Server.Queues.ScoreStatisticsProcessor/Helpers/UserTotalPerformanceAggregateHelper.cs#L41-L45
         acc_sum *= 100 / (20 * (1 - math.pow(0.95, len(bps))))
