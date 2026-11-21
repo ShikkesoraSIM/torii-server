@@ -57,7 +57,8 @@ import hashlib
 from fastapi import File, Form, HTTPException, Query, Security
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import or_ as sql_or
+from sqlalchemy import or_ as sql_or, text
+from sqlalchemy.orm import undefer
 from sqlmodel import col, exists, func, select
 
 logger = log("AdminRouter")
@@ -308,7 +309,13 @@ async def require_admin(session: Database, user_and_token: UserAndToken) -> User
     return current_user
 
 
-async def user_to_dict(user: User, session: Database) -> dict:
+async def user_to_dict(
+    user: User,
+    session: Database,
+    *,
+    restricted: bool | None = None,
+    db_badges: list[dict] | None = None,
+) -> dict:
     """Convert User object to dictionary for API response"""
     # Get basic model dump
     user_dict = user.model_dump(exclude_none=True)
@@ -329,10 +336,13 @@ async def user_to_dict(user: User, session: Database) -> dict:
     except Exception:
         user_dict["is_qat"] = False
 
-    try:
-        user_dict["is_restricted"] = await user.is_restricted(session)
-    except Exception:
-        user_dict["is_restricted"] = False
+    if restricted is not None:
+        user_dict["is_restricted"] = restricted
+    else:
+        try:
+            user_dict["is_restricted"] = await user.is_restricted(session)
+        except Exception:
+            user_dict["is_restricted"] = False
 
     user_dict["torii_titles"] = user.torii_titles or []
 
@@ -349,23 +359,24 @@ async def user_to_dict(user: User, session: Database) -> dict:
                 legacy_badges.append(badge_copy)
 
         # 2. Get badges from user_badges table (new)
-        db_badges = []
-        user_badges_list = (
-            await session.exec(
-                select(UserBadge).where(UserBadge.user_id == user.id).order_by(col(UserBadge.awarded_at).desc())
-            )
-        ).all()
-        if user_badges_list:
-            for badge in user_badges_list:
-                db_badges.append({
-                    "id": badge.id,
-                    "description": badge.description,
-                    "image_url": badge.image_url,
-                    "image@2x_url": badge.image_2x_url,
-                    "url": badge.url,
-                    "awarded_at": badge.awarded_at.isoformat() if isinstance(badge.awarded_at, datetime) else badge.awarded_at,
-                    "user_id": badge.user_id
-                })
+        if db_badges is None:
+            db_badges = []
+            user_badges_list = (
+                await session.exec(
+                    select(UserBadge).where(UserBadge.user_id == user.id).order_by(col(UserBadge.awarded_at).desc())
+                )
+            ).all()
+            if user_badges_list:
+                for badge in user_badges_list:
+                    db_badges.append({
+                        "id": badge.id,
+                        "description": badge.description,
+                        "image_url": badge.image_url,
+                        "image@2x_url": badge.image_2x_url,
+                        "url": badge.url,
+                        "awarded_at": badge.awarded_at.isoformat() if isinstance(badge.awarded_at, datetime) else badge.awarded_at,
+                        "user_id": badge.user_id
+                    })
 
         # Combine both, preferring DB badges.
         user_dict["badges"] = db_badges + legacy_badges
@@ -1214,7 +1225,12 @@ async def get_all_users(
     """
     await require_admin(session, user_and_token)
 
-    stmt = select(User)
+    stmt = select(User).options(
+        undefer(User.is_admin),
+        undefer(User.is_gmt),
+        undefer(User.is_qat),
+        undefer(User.badges),
+    )
     if search.strip():
         stmt = stmt.where(col(User.username).ilike(f"%{search.strip()}%"))
     stmt = stmt.order_by(col(User.id))
@@ -1222,7 +1238,62 @@ async def get_all_users(
         stmt = stmt.limit(limit)
 
     users = (await session.exec(stmt)).all()
-    return [await user_to_dict(user, session) for user in users]
+    if not users:
+        return []
+
+    user_ids = [u.id for u in users if u.id is not None]
+
+    # traemos restricciones y badges en batch en vez de por usuario
+    restricted_ids = set(
+        (
+            await session.exec(
+                select(UserAccountHistory.user_id)
+                .where(
+                    col(UserAccountHistory.user_id).in_(user_ids),
+                    col(UserAccountHistory.type) == UserAccountHistoryType.RESTRICTION,
+                    (col(UserAccountHistory.permanent).is_(True))
+                    | (
+                        func.timestampadd(
+                            text("SECOND"),
+                            col(UserAccountHistory.length),
+                            col(UserAccountHistory.timestamp),
+                        )
+                        > func.now()
+                    ),
+                )
+                .distinct()
+            )
+        ).all()
+    )
+
+    badges_by_user: dict[int, list[dict]] = {}
+    all_db_badges = (
+        await session.exec(
+            select(UserBadge)
+            .where(col(UserBadge.user_id).in_(user_ids))
+            .order_by(col(UserBadge.awarded_at).desc())
+        )
+    ).all()
+    for badge in all_db_badges:
+        badges_by_user.setdefault(badge.user_id, []).append({
+            "id": badge.id,
+            "description": badge.description,
+            "image_url": badge.image_url,
+            "image@2x_url": badge.image_2x_url,
+            "url": badge.url,
+            "awarded_at": badge.awarded_at.isoformat() if isinstance(badge.awarded_at, datetime) else badge.awarded_at,
+            "user_id": badge.user_id,
+        })
+
+    return [
+        await user_to_dict(
+            user,
+            session,
+            restricted=user.id in restricted_ids,
+            db_badges=badges_by_user.get(user.id, []),
+        )
+        for user in users
+    ]
 
 
 @router.get(
