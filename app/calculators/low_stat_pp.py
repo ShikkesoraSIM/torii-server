@@ -92,7 +92,4 @@ def low_cs_od_pp_factor(
     cs_threshold = CS_THRESHOLD_RX if is_relax else CS_THRESHOLD
     od_threshold = OD_THRESHOLD_RX if is_relax else OD_THRESHOLD
     floor = STAT_FLOOR_RX if is_relax else STAT_FLOOR
-    # en relax el od ya lo nerfea el calculador
-    if is_relax:
-        return _stat_factor(cs, cs_threshold, floor)
     return _stat_factor(cs, cs_threshold, floor) * _stat_factor(od, od_threshold, floor)
