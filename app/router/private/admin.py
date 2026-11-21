@@ -1244,46 +1244,53 @@ async def get_all_users(
     user_ids = [u.id for u in users if u.id is not None]
 
     # traemos restricciones y badges en batch en vez de por usuario
-    restricted_ids = set(
-        (
-            await session.exec(
-                select(UserAccountHistory.user_id)
-                .where(
-                    col(UserAccountHistory.user_id).in_(user_ids),
-                    col(UserAccountHistory.type) == UserAccountHistoryType.RESTRICTION,
-                    (col(UserAccountHistory.permanent).is_(True))
-                    | (
-                        func.timestampadd(
-                            text("SECOND"),
-                            col(UserAccountHistory.length),
-                            col(UserAccountHistory.timestamp),
-                        )
-                        > func.now()
-                    ),
+    restricted_ids: set[int] = set()
+    try:
+        restricted_ids = set(
+            (
+                await session.exec(
+                    select(UserAccountHistory.user_id)
+                    .where(
+                        col(UserAccountHistory.user_id).in_(user_ids),
+                        col(UserAccountHistory.type) == UserAccountHistoryType.RESTRICTION,
+                        (col(UserAccountHistory.permanent).is_(True))
+                        | (
+                            func.timestampadd(
+                                text("SECOND"),
+                                col(UserAccountHistory.length),
+                                col(UserAccountHistory.timestamp),
+                            )
+                            > func.now()
+                        ),
+                    )
+                    .distinct()
                 )
-                .distinct()
-            )
-        ).all()
-    )
+            ).all()
+        )
+    except Exception:
+        pass
 
     badges_by_user: dict[int, list[dict]] = {}
-    all_db_badges = (
-        await session.exec(
-            select(UserBadge)
-            .where(col(UserBadge.user_id).in_(user_ids))
-            .order_by(col(UserBadge.awarded_at).desc())
-        )
-    ).all()
-    for badge in all_db_badges:
-        badges_by_user.setdefault(badge.user_id, []).append({
-            "id": badge.id,
-            "description": badge.description,
-            "image_url": badge.image_url,
-            "image@2x_url": badge.image_2x_url,
-            "url": badge.url,
-            "awarded_at": badge.awarded_at.isoformat() if isinstance(badge.awarded_at, datetime) else badge.awarded_at,
-            "user_id": badge.user_id,
-        })
+    try:
+        all_db_badges = (
+            await session.exec(
+                select(UserBadge)
+                .where(col(UserBadge.user_id).in_(user_ids))
+                .order_by(col(UserBadge.awarded_at).desc())
+            )
+        ).all()
+        for badge in all_db_badges:
+            badges_by_user.setdefault(badge.user_id, []).append({
+                "id": badge.id,
+                "description": badge.description,
+                "image_url": badge.image_url,
+                "image@2x_url": badge.image_2x_url,
+                "url": badge.url,
+                "awarded_at": badge.awarded_at.isoformat() if isinstance(badge.awarded_at, datetime) else badge.awarded_at,
+                "user_id": badge.user_id,
+            })
+    except Exception:
+        pass
 
     return [
         await user_to_dict(
