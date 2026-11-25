@@ -102,7 +102,7 @@ class BeatmapCacheService:
         获取缓存统计信息
         """
         try:
-            keys = await self.redis.keys("beatmap:*:raw")
+            keys = [k async for k in self.redis.scan_iter(match="beatmap:*:raw", count=500)]
             total_size = 0
 
             for key in keys[:100]:  # 限制检查数量以避免性能问题
@@ -130,7 +130,7 @@ class BeatmapCacheService:
         try:
             logger.info(f"Cleaning up beatmap cache older than {max_age_hours} hours")
             # Redis会自动清理过期的key，这里主要是记录日志
-            keys = await self.redis.keys("beatmap:*:raw")
+            keys = [k async for k in self.redis.scan_iter(match="beatmap:*:raw", count=500)]
             logger.info(f"Current cache contains {len(keys)} beatmaps")
         except Exception as e:
             logger.error(f"Error during cache cleanup: {e}")

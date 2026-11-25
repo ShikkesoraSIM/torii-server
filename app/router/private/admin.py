@@ -456,11 +456,12 @@ class AssignClientHashReq(BaseModel):
 
 
 async def _count_online_users(redis) -> int:
-    """Count online users with set-first strategy and SCAN fallback."""
+    """Count online users with O(1) SCARD fast-path and guarded SCAN fallback."""
     try:
         online_set_key = "metadata:online_users_set"
-        if await redis.exists(online_set_key):
-            return int(await redis.scard(online_set_key))
+        count = int(await redis.scard(online_set_key) or 0)
+        if count > 0 or await redis.exists("metadata:online_users_set:migrated"):
+            return count
     except Exception:
         pass
 

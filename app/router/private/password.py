@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated
 
 from app.auth import (
@@ -98,7 +99,7 @@ async def change_password(
 
     user_id = current_user.id
 
-    current_user.pw_bcrypt = get_password_hash(new_password)
+    current_user.pw_bcrypt = await asyncio.to_thread(get_password_hash, new_password)
 
     await session.execute(delete(TrustedDevice).where(col(TrustedDevice.user_id) == user_id))
     await session.execute(delete(LoginSession).where(col(LoginSession.user_id) == user_id))

@@ -216,9 +216,9 @@ class BeatmapsetCacheService:
     async def get_cache_stats(self) -> dict:
         """获取缓存统计信息"""
         try:
-            beatmapset_keys = await self.redis.keys("beatmapset:*")
-            lookup_keys = await self.redis.keys("beatmap_lookup:*")
-            search_keys = await self.redis.keys("beatmapset_search:*")
+            beatmapset_keys = [k async for k in self.redis.scan_iter(match="beatmapset:*", count=500)]
+            lookup_keys = [k async for k in self.redis.scan_iter(match="beatmap_lookup:*", count=500)]
+            search_keys = [k async for k in self.redis.scan_iter(match="beatmapset_search:*", count=500)]
 
             return {
                 "cached_beatmapsets": len(beatmapset_keys),

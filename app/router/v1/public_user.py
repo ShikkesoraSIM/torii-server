@@ -134,11 +134,10 @@ async def _count_online_users_optimized(redis):
     """
     try:
         online_set_key = "metadata:online_users_set"
-        if await redis.exists(online_set_key):
-            count = await redis.scard(online_set_key)
+        count = int(await redis.scard(online_set_key) or 0)
+        if count > 0 or await redis.exists("metadata:online_users_set:migrated"):
             logger.debug(f"Using online users set, count: {count}")
             return count
-
     except Exception as e:
         logger.debug(f"Online users set not available: {e}")
 

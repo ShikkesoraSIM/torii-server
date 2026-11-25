@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from typing import Literal
 
@@ -7,6 +8,7 @@ from app.database.briefing_radar import ToriiBriefingRadarSnapshot
 from app.database.score import Score
 from app.database.total_score_best_scores import TotalScoreBestScore
 from app.database.user import User
+from app.dependencies.database import get_redis, with_db
 from app.models.score import GameMode
 from app.utils import utcnow
 
@@ -15,6 +17,19 @@ from sqlalchemy import and_
 from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import col, func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
+
+_BRIEFING_CACHE_TTL_SECONDS = 30
+_briefing_locks: dict[str, asyncio.Lock] = {}
+
+
+def _get_briefing_lock(key: str) -> asyncio.Lock:
+    lock = _briefing_locks.get(key)
+    if lock is None:
+        if len(_briefing_locks) > 4096:
+            _briefing_locks.clear()
+        lock = asyncio.Lock()
+        _briefing_locks[key] = lock
+    return lock
 
 
 RadarSeverity = Literal["good", "bad", "info"]
@@ -70,12 +85,65 @@ async def get_briefing_radar(
     candidate_limit: int = 200,
 ) -> BriefingRadarResponse:
     variant = _normalise_variant(variant)
+    cache_key = f"briefing_radar:v2:{user.id}:{mode.value}:{variant}:{track_top}:{max_events}:{candidate_limit}"
+    redis = get_redis()
+
+    try:
+        cached = await redis.get(cache_key)
+        if cached:
+            return BriefingRadarResponse.model_validate_json(cached)
+    except Exception:
+        pass
+
+    lock = _get_briefing_lock(cache_key)
+    async with lock:
+        try:
+            cached = await redis.get(cache_key)
+            if cached:
+                return BriefingRadarResponse.model_validate_json(cached)
+        except Exception:
+            pass
+
+        response = await _compute_briefing_radar(
+            session=session,
+            user=user,
+            mode=mode,
+            variant=variant,
+            track_top=track_top,
+            max_events=max_events,
+            candidate_limit=candidate_limit,
+        )
+
+        try:
+            await redis.set(cache_key, response.model_dump_json(), ex=_BRIEFING_CACHE_TTL_SECONDS)
+        except Exception:
+            pass
+
+        return response
+
+
+async def _compute_briefing_radar(
+    session: AsyncSession,
+    user: User,
+    mode: GameMode,
+    variant: str,
+    track_top: int,
+    max_events: int,
+    candidate_limit: int,
+) -> BriefingRadarResponse:
     now = utcnow()
-    previous_row = await _get_snapshot_row(session, user.id, mode, variant)
+
+    async def _fetch_candidates() -> list[int]:
+        async with with_db() as s2:
+            return await _get_candidate_beatmap_ids(s2, user, mode, candidate_limit)
+
+    previous_row, beatmap_ids = await asyncio.gather(
+        _get_snapshot_row(session, user.id, mode, variant),
+        _fetch_candidates(),
+    )
     previous_snapshots = _parse_snapshot_data(previous_row.snapshot_data if previous_row else [])
     previous_by_beatmap = {snapshot.beatmap_id: snapshot for snapshot in previous_snapshots}
 
-    beatmap_ids = await _get_candidate_beatmap_ids(session, user, mode, candidate_limit)
     beatmap_ids = list(dict.fromkeys([*beatmap_ids, *previous_by_beatmap.keys()]))
 
     current_snapshots = await _get_current_snapshots(session, user, mode, beatmap_ids)
@@ -266,6 +334,8 @@ async def _build_events(
 ) -> list[BriefingRadarEvent]:
     events: list[BriefingRadarEvent] = []
 
+    sniped_items: list[tuple[int, BriefingRadarScoreSnapshot, BriefingRadarScoreSnapshot]] = []
+
     for beatmap_id, previous_snapshot in previous.items():
         current_snapshot = current.get(beatmap_id)
         if current_snapshot is None:
@@ -284,7 +354,31 @@ async def _build_events(
             continue
 
         if current_snapshot.position > previous_snapshot.position:
-            actor_user_id, actor_username = await _get_leading_actor(session, user, mode, current_snapshot)
+            sniped_items.append((beatmap_id, previous_snapshot, current_snapshot))
+        elif current_snapshot.position < previous_snapshot.position:
+            events.append(
+                BriefingRadarEvent(
+                    type="climbed",
+                    severity="good",
+                    beatmap_id=beatmap_id,
+                    score_id=current_snapshot.score_id,
+                    previous_position=previous_snapshot.position,
+                    current_position=current_snapshot.position,
+                    headline=f"You climbed to #{current_snapshot.position}",
+                    detail=(
+                        f"{current_snapshot.display_title}: "
+                        f"#{previous_snapshot.position} -> #{current_snapshot.position}"
+                    ),
+                )
+            )
+
+    if sniped_items:
+        async def _resolve_actor(snap: BriefingRadarScoreSnapshot) -> tuple[int | None, str | None]:
+            async with with_db() as s2:
+                return await _get_leading_actor(s2, user, mode, snap)
+
+        actors = await asyncio.gather(*(_resolve_actor(curr) for _, _, curr in sniped_items))
+        for (beatmap_id, previous_snapshot, current_snapshot), (actor_user_id, actor_username) in zip(sniped_items, actors):
             actor_prefix = f"{actor_username} pushed you" if actor_username else "You dropped"
             events.append(
                 BriefingRadarEvent(
@@ -297,22 +391,6 @@ async def _build_events(
                     actor_user_id=actor_user_id,
                     actor_username=actor_username,
                     headline=f"{actor_prefix} to #{current_snapshot.position}",
-                    detail=(
-                        f"{current_snapshot.display_title}: "
-                        f"#{previous_snapshot.position} -> #{current_snapshot.position}"
-                    ),
-                )
-            )
-        elif current_snapshot.position < previous_snapshot.position:
-            events.append(
-                BriefingRadarEvent(
-                    type="climbed",
-                    severity="good",
-                    beatmap_id=beatmap_id,
-                    score_id=current_snapshot.score_id,
-                    previous_position=previous_snapshot.position,
-                    current_position=current_snapshot.position,
-                    headline=f"You climbed to #{current_snapshot.position}",
                     detail=(
                         f"{current_snapshot.display_title}: "
                         f"#{previous_snapshot.position} -> #{current_snapshot.position}"
@@ -386,6 +464,8 @@ async def _save_snapshot(
         )
         session.add(row)
     else:
+        if row.snapshot_data == snapshot_data:
+            return
         row.snapshot_data = snapshot_data
         row.updated_at = now
         flag_modified(row, "snapshot_data")

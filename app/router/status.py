@@ -182,8 +182,9 @@ async def _collect_sample() -> dict:
 
 async def _count_online(redis) -> int:
     try:
-        if await redis.exists("metadata:online_users_set"):
-            return int(await redis.scard("metadata:online_users_set"))
+        count = int(await redis.scard("metadata:online_users_set") or 0)
+        if count > 0 or await redis.exists("metadata:online_users_set:migrated"):
+            return count
     except Exception:
         pass
     try:
@@ -194,6 +195,7 @@ async def _count_online(redis) -> int:
             iters += 1
             if cursor == 0 or iters >= 500:
                 break
+        await redis.set("metadata:online_users_set:migrated", "1", ex=60)
         return count
     except Exception:
         return 0
