@@ -409,7 +409,8 @@
           "SO",
           "TC",
           "AD",
-          "DP"
+          "DP",
+          "AM"
         ],
         "RequiresConfiguration": false,
         "UserPlayable": true,
@@ -533,7 +534,8 @@
           }
         ],
         "IncompatibleMods": [
-          "TP"
+          "TP",
+          "AM"
         ],
         "RequiresConfiguration": false,
         "UserPlayable": true,
@@ -1381,6 +1383,54 @@
         "UserPlayable": true,
         "ValidForMultiplayer": true,
         "ValidForFreestyleAsRequiredMod": true,
+        "ValidForMultiplayerAsFreeMod": true,
+        "AlwaysValidForSubmission": false
+      },
+      {
+        "Acronym": "AM",
+        "Name": "Amplify",
+        "Description": "Stretch or compact spacing between objects while keeping patterns playable.",
+        "Type": "Conversion",
+        "Settings": [
+          {
+            "Name": "spacing_multiplier",
+            "Type": "number",
+            "Label": "Spacing multiplier",
+            "Description": "Target multiplier for distance between consecutive objects."
+          },
+          {
+            "Name": "space_streams",
+            "Type": "boolean",
+            "Label": "Space streams",
+            "Description": "Also adjust spacing inside streams. Off keeps streams at their original spacing."
+          },
+          {
+            "Name": "rotate_sliders",
+            "Type": "boolean",
+            "Label": "Rotate sliders to fit",
+            "Description": "Allow sliders to rotate smoothly around their head when needed to avoid playfield edges or awkward flow. Slider velocity is unchanged."
+          },
+          {
+            "Name": "accent_angles",
+            "Type": "boolean",
+            "Label": "Accent jump angles",
+            "Description": "Make turns between consecutive jumps sharper without creating overlaps."
+          },
+          {
+            "Name": "kiai_only",
+            "Type": "boolean",
+            "Label": "Kiai only",
+            "Description": "Only adjust objects inside kiai sections."
+          }
+        ],
+        "IncompatibleMods": [
+          "RD",
+          "TP"
+        ],
+        "RequiresConfiguration": false,
+        "UserPlayable": true,
+        "ValidForMultiplayer": true,
+        "ValidForFreestyleAsRequiredMod": false,
         "ValidForMultiplayerAsFreeMod": true,
         "AlwaysValidForSubmission": false
       }

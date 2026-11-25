@@ -185,6 +185,17 @@ DEFAULT_RANKED_MODS = {
         # mapper's hitsounds. Neither changes the play, so both are accepted
         # without constraint.
         "HS": {"bank": {"check": False, "type": "string"}, "use_note_samples": {"check": False, "type": "boolean"}},
+        # Amplify: Torii conversion mod (osu!std only) that scales spacing
+        # between objects via convex optimization while keeping rhythm,
+        # slider velocities, and playfield bounds intact. Ranked because
+        # performance-server runs the exact same OsuModAmplify transform.
+        "AM": {
+            "spacing_multiplier": {"check": False, "type": "number"},
+            "space_streams": {"check": False, "type": "boolean"},
+            "rotate_sliders": {"check": False, "type": "boolean"},
+            "accent_angles": {"check": False, "type": "boolean"},
+            "kiai_only": {"check": False, "type": "boolean"},
+        },
         "TD": {},
         "BL": {},   # Blinds
         "NS": {"hidden_combo_count": {"check": False, "type": "number"}},
