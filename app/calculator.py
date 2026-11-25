@@ -204,7 +204,7 @@ async def calculate_pp(
         if beatmap_banned:
             return 0
         try:
-            is_suspicious = is_suspicious_beatmap(beatmap)
+            is_suspicious = await asyncio.to_thread(is_suspicious_beatmap, beatmap)
             if is_suspicious:
                 session.add(BannedBeatmaps(
                     beatmap_id=score.beatmap_id,

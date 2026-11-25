@@ -52,6 +52,7 @@ the user can't already see by clicking around.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -135,6 +136,9 @@ _SPARKLINE_BUCKET_SECONDS = 60
 # --- Endpoint -----------------------------------------------------------------
 
 
+_pulse_lock = asyncio.Lock()
+
+
 @router.get(
     "/torii/server-pulse",
     tags=["Torii"],
@@ -157,17 +161,25 @@ async def get_server_pulse(session: Database) -> dict[str, Any]:
     except Exception:
         pass
 
-    snapshot = await _compute_pulse_snapshot(session, redis)
+    async with _pulse_lock:
+        try:
+            cached = await redis.get(_PULSE_CACHE_KEY)
+            if cached:
+                return json.loads(cached)
+        except Exception:
+            pass
 
-    # Cache write is best-effort. If Redis is down or hiccups, we
-    # already have a valid snapshot to return — no point failing the
-    # request just because the next caller will recompute.
-    try:
-        await redis.set(_PULSE_CACHE_KEY, json.dumps(snapshot), ex=_PULSE_CACHE_TTL_SECONDS)
-    except Exception:
-        pass
+        snapshot = await _compute_pulse_snapshot(session, redis)
 
-    return snapshot
+        # Cache write is best-effort. If Redis is down or hiccups, we
+        # already have a valid snapshot to return — no point failing the
+        # request just because the next caller will recompute.
+        try:
+            await redis.set(_PULSE_CACHE_KEY, json.dumps(snapshot), ex=_PULSE_CACHE_TTL_SECONDS)
+        except Exception:
+            pass
+
+        return snapshot
 
 
 async def refresh_pulse_cache() -> None:
@@ -212,16 +224,45 @@ async def _compute_pulse_snapshot(session, redis) -> dict[str, Any]:
     five_min_ago = now - timedelta(minutes=5)
     in_flight_cutoff = now - timedelta(minutes=_IN_FLIGHT_MAX_AGE_MIN)
 
-    # Pull all in-flight tokens within the cutoff in one query, ordered
-    # newest first so dedup picks up the latest token per user.
-    in_flight_tokens = (
-        await session.exec(
-            select(ScoreToken)
-            .where(col(ScoreToken.score_id).is_(None))
-            .where(ScoreToken.created_at >= in_flight_cutoff)
-            .order_by(sa_desc(ScoreToken.created_at))
-        )
-    ).all()
+    async def _fetch_tokens():
+        return (
+            await session.exec(
+                select(ScoreToken)
+                .where(col(ScoreToken.score_id).is_(None))
+                .where(ScoreToken.created_at >= in_flight_cutoff)
+                .order_by(sa_desc(ScoreToken.created_at))
+            )
+        ).all()
+
+    async def _fetch_play_counts():
+        async with with_db() as s2:
+            row = (
+                await s2.exec(
+                    select(
+                        func.sum(func.if_(Score.ended_at >= one_min_ago, 1, 0)),
+                        func.count(),
+                    )
+                    .select_from(Score)
+                    .where(Score.ended_at >= five_min_ago)
+                )
+            ).one()
+            return int(row[0] or 0), int(row[1] or 0)
+
+    async def _fetch_sparkline():
+        async with with_db() as s2:
+            return await _compute_sparkline_buckets(s2, now)
+
+    async def _fetch_top_maps():
+        async with with_db() as s2:
+            return await _compute_top_maps(s2, five_min_ago)
+
+    in_flight_tokens, (plays_1m, plays_5m), sparkline, top_maps, online = await asyncio.gather(
+        _fetch_tokens(),
+        _fetch_play_counts(),
+        _fetch_sparkline(),
+        _fetch_top_maps(),
+        _count_online_users(redis),
+    )
 
     # Dedup by user_id keeping the most-recent token (the iteration
     # is in created_at desc order, so the first time we see a user_id
@@ -236,27 +277,8 @@ async def _compute_pulse_snapshot(session, redis) -> dict[str, Any]:
         seen_users.add(tok.user_id)
         deduped_tokens.append(tok)
 
-    plays_1m = (
-        await session.exec(
-            select(func.count())
-            .select_from(Score)
-            .where(Score.ended_at >= one_min_ago)
-        )
-    ).one()
-
-    plays_5m = (
-        await session.exec(
-            select(func.count())
-            .select_from(Score)
-            .where(Score.ended_at >= five_min_ago)
-        )
-    ).one()
-
-    sparkline = await _compute_sparkline_buckets(session, now)
-    top_maps = await _compute_top_maps(session, five_min_ago)
     mode_breakdown = _compute_mode_breakdown_from_tokens(deduped_tokens)
     recent_plays = await _compute_mixed_recent_plays(session, deduped_tokens, now)
-    online = await _count_online_users(redis)
 
     # ``top_map`` (singular) preserved for backward compatibility with
     # the v1 client DTO; new clients use ``top_maps`` (plural) for the
@@ -663,19 +685,11 @@ def _stringify_rank(value: Any) -> str:
 
 
 async def _count_online_users(redis) -> int:
-    """Count distinct online presences from Redis.
-
-    Strategy mirrors :func:`app.router.private.admin._count_online_users`
-    and :func:`app.router.v1.public_user._count_online_users` exactly so
-    all three surfaces report the same number.
-
-    Set-first (``metadata:online_users_set``) is the fast path — O(1)
-    SCARD vs an O(N) SCAN. SCAN is the fallback for environments that
-    haven't migrated to the explicit set yet.
-    """
+    """Count distinct online presences from Redis (O(1) SCARD fast-path)."""
     try:
-        if await redis.exists("metadata:online_users_set"):
-            return int(await redis.scard("metadata:online_users_set"))
+        count = int(await redis.scard("metadata:online_users_set") or 0)
+        if count > 0 or await redis.exists("metadata:online_users_set:migrated"):
+            return count
     except Exception:
         pass
 
@@ -687,6 +701,7 @@ async def _count_online_users(redis) -> int:
             count += len(keys)
             if cursor == 0:
                 break
+        await redis.set("metadata:online_users_set:migrated", "1", ex=60)
         return count
     except Exception:
         return 0

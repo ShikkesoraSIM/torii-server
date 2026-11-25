@@ -1467,6 +1467,7 @@ async def get_user_playlist_score(
         ).first()
         if score_record:
             break
+        await asyncio.sleep(0.05)
     if not score_record:
         raise HTTPException(status_code=404, detail="Score not found")
 

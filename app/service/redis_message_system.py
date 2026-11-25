@@ -10,6 +10,8 @@ from datetime import datetime
 import json
 from typing import Any
 
+from sqlmodel import col, select
+
 from app.database import ChatMessageDict
 from app.database.chat import ChatMessage, ChatMessageModel, MessageType
 from app.database.user import User, UserModel
@@ -100,16 +102,24 @@ class RedisMessageSystem:
             # 从 Redis 获取最新消息
             redis_messages = await self._get_from_redis(channel_id, limit, since)
 
-            # 为每条消息构建响应对象
-            async with with_db() as session:
+            # Batch-load all unique senders in 1 query and transform once per sender
+            if redis_messages:
+                from app.database.chat import ChatMessageDict
+
+                sender_ids = list({msg_data["sender_id"] for msg_data in redis_messages})
+                async with with_db() as session:
+                    senders = (
+                        await session.exec(select(User).where(col(User.id).in_(sender_ids)))
+                    ).all()
+                    user_resp_by_id: dict[int, Any] = {}
+                    for sender in senders:
+                        user_resp_by_id[sender.id] = await UserModel.transform(
+                            sender, session=session, includes=User.LIST_INCLUDES
+                        )
+
                 for msg_data in redis_messages:
-                    # 获取发送者信息
-                    sender = await session.get(User, msg_data["sender_id"])
-                    if sender:
-                        user_resp = await UserModel.transform(sender, includes=User.LIST_INCLUDES)
-
-                        from app.database.chat import ChatMessageDict
-
+                    user_resp = user_resp_by_id.get(msg_data["sender_id"])
+                    if user_resp is not None:
                         ts_raw = msg_data.get("timestamp")
                         if isinstance(ts_raw, str):
                             if ts_raw.endswith("Z"):
@@ -454,8 +464,7 @@ class RedisMessageSystem:
         try:
             fixed_count = 0
 
-            channel_keys = await self.redis.keys("channel:*:messages")
-            for key in channel_keys:
+            async for key in self.redis.scan_iter(match="channel:*:messages", count=500):
                 try:
                     key_type = await self.redis.type(key)
                     if key_type not in ("none", "zset"):
@@ -478,8 +487,7 @@ class RedisMessageSystem:
                         except Exception as final_error:
                             logger.error(f"Critical: Unable to clear problematic key {key}: {final_error}")
 
-            message_keys = await self.redis.keys("msg:*:*")
-            for key in message_keys:
+            async for key in self.redis.scan_iter(match="msg:*:*", count=500):
                 try:
                     key_type = await self.redis.type(key)
                     if key_type not in ("none", "string"):
