@@ -107,10 +107,12 @@ services:
         #
         # Y va SHA fijo, nunca una rama: `pp-dev` se mueve sola, asi que cada rebuild
         # traia otro calculo distinto y el cliente (que si esta pinneado) nunca podia
-        # coincidir. Este SHA es el tag v2026.813.6-nova, o sea exactamente el codigo
-        # que corre la gente. Al cortar release nueva, actualizar este pin tambien.
-        OSU_REPO: https://github.com/ShikkesoraSIM/torii-osu.git
-        OSU_REF: 94d3e79fea814e83e364fcbe11054e80a160831f
+        # coincidir. Este SHA corresponde al master actual con PR #50 y PR #51.
+        PERF_SERVER_REF: b02fb99369cdeeabe19bedf3de4e57263a6d9509
+        OSU_REPO: https://github.com/ShikkesoraSIM/torii.git
+        OSU_REF: 321081b1796c92e1164da8d678fd0fb5ed278bf5
+        FRAMEWORK_REF: b29d1347c21a952cc7bf68f9e02e4f65c40c2c14
+        RESOURCES_REF: 052c77623424f3f1a571d8bcbac0d608d458f8f8
     image: g0v0-performance-server-ppdev
     container_name: performance_server
     environment:

@@ -5,17 +5,17 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 # framework/resources por ProjectReference vendored, asi que hay que clonarlos a
 # ../../toriirefresh-{framework,resources} (mismos refs que usa el build de release).
 ARG PERF_SERVER_REPO=https://github.com/ShikkesoraSIM/torii-performance-server.git
-ARG PERF_SERVER_REF=601d057
-ARG OSU_REPO=https://github.com/ShikkesoraSIM/torii-osu.git
-ARG OSU_REF=94d3e79fea814e83e364fcbe11054e80a160831f
+ARG PERF_SERVER_REF=b02fb99369cdeeabe19bedf3de4e57263a6d9509
+ARG OSU_REPO=https://github.com/ShikkesoraSIM/torii.git
+ARG OSU_REF=321081b1796c92e1164da8d678fd0fb5ed278bf5
 # OJO: estos DOS refs van sincronizados con el OSU_REF de arriba, son los mismos que
 # FRAMEWORK_REF/RESOURCES_REF del build-gu.yml del tag que corre el cliente. Si se
 # actualiza el OSU_REF y estos quedan viejos, el build muere con errores de override
 # tipo CS0115 (el codigo de nova llama a APIs que ese framework todavia no tiene).
 ARG FRAMEWORK_REPO=https://github.com/ShikkesoraSIM/torii-framework.git
-ARG FRAMEWORK_REF=0ebb6908cbe70b763c6b4aab45dd6520b40c6bea
+ARG FRAMEWORK_REF=b29d1347c21a952cc7bf68f9e02e4f65c40c2c14
 ARG RESOURCES_REPO=https://github.com/ShikkesoraSIM/torii-resources.git
-ARG RESOURCES_REF=cddd70c3acba2e3cac84f6494f8cecd07a321710
+ARG RESOURCES_REF=052c77623424f3f1a571d8bcbac0d608d458f8f8
 
 WORKDIR /src
 
