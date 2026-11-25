@@ -371,6 +371,9 @@ async def get_user_pp_variant_statistics(
     return pp_sum, acc_sum
 
 
+_pp_dev_snapshot_locks: dict[str, asyncio.Lock] = {}
+
+
 async def get_pp_dev_ranking_snapshot(
     *,
     session: AsyncSession,
@@ -387,6 +390,32 @@ async def get_pp_dev_ranking_snapshot(
                 return payload
         except json.JSONDecodeError:
             pass
+
+    lock = _pp_dev_snapshot_locks.setdefault(cache_key, asyncio.Lock())
+    async with lock:
+        cached = await redis.get(cache_key)
+        if cached:
+            try:
+                payload = json.loads(cached)
+                if isinstance(payload, list):
+                    return payload
+            except json.JSONDecodeError:
+                pass
+        return await _build_pp_dev_ranking_snapshot(
+            session=session,
+            ruleset=ruleset,
+            redis=redis,
+            fetcher=fetcher,
+        )
+
+
+async def _build_pp_dev_ranking_snapshot(
+    *,
+    session: AsyncSession,
+    ruleset: GameMode,
+    redis: Redis,
+    fetcher: "Fetcher",
+) -> list[dict[str, Any]]:
 
     rows = (
         await session.exec(
