@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 
 from app.calculators.performance import PerformanceCalculator
 from app.calculators.performance.sunny_mania import calculate_sunny_mania_pp
-from app.calculators.low_stat_pp import low_cs_od_pp_factor
 from app.config import settings
 from app.const import MAX_SCORE
 from app.dependencies.storage import get_storage_service
@@ -251,17 +250,6 @@ async def calculate_pp(
     else:
         attrs = await calculator.calculate_performance(beatmap, score)
         pp = attrs.pp
-
-    # Torii: low CS/OD pp nerf, applied here (calculator-agnostic) so it works no
-    # matter which calculator produced the pp (rosu or the performance server).
-    # osu! ruleset family only; relax widens the band; Easy + non-osu return 1.0.
-    if base_mode == GameMode.OSU and pp > 0:
-        cs, od = _beatmap_cs_od_from_raw(beatmap)
-        factor = low_cs_od_pp_factor(
-            0, score.mods, cs, od, is_relax=score.gamemode == GameMode.OSURX
-        )
-        if factor != 1.0:
-            pp *= factor
 
     # Torii: No Release (NR, mania) queda ranked con un haircut suave del 15%.
     # NR saca el timing de release de los LN (holds mas faciles), pero con el
