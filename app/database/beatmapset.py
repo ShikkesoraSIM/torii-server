@@ -54,27 +54,24 @@ def _otra_resolucion(url: str, *, retina: bool) -> str | None:
     return f"{raiz[:-3]}{ext}{sep}{query}" if raiz.endswith("@2x") else url
 
 
+def _proxy_cover_url(url: str) -> str:
+    """Reescribe URLs de covers de assets.ppy.sh al proxy propio en lazer.shikkesora.com."""
+    if not isinstance(url, str):
+        return url
+    prefix = "https://assets.ppy.sh/beatmaps/"
+    if url.startswith(prefix):
+        return "https://lazer.shikkesora.com/beatmapsets/" + url[len(prefix):]
+    return url
+
+
 def completar_covers(covers: Any) -> Any:
     """
-    Rellena las variantes de cover que falten.
-
-    lazer lee las @2x y no las chicas: en BeatmapSetOnlineCovers, Cover mapea a "cover@2x", Card a
-    "card@2x" y List a "list@2x". Si esa clave no viene, OnlineBeatmapSetCover se queda sin url y
-    dibuja el cuadro gris.
-
-    Los mirrors de los que sacamos metadata mandan solo las cuatro chicas, asi que la mitad de los
-    sets de la base quedaron sin foto adentro del juego: el cartel del daily challenge, las cards,
-    cualquier lado que dibuje una portada.
-
-    assets.ppy.sh sirve las dos resoluciones en la misma ruta, cambia el nombre del archivo nomas
-    (cover.jpg / cover@2x.jpg), y el ?query de cache-busting es el mismo. Asi que la que falta se
-    deduce de la que hay en vez de salir a pedirla de nuevo, y con eso se arreglan tambien todas
-    las filas viejas sin tocar la base.
+    Rellena las variantes de cover que falten y las apunta al proxy propio.
     """
     if not isinstance(covers, dict) or not covers:
         return covers
 
-    completo = dict(covers)
+    completo = {k: _proxy_cover_url(v) for k, v in covers.items()}
 
     for nombre in COVER_VARIANTES:
         chica = completo.get(nombre)
@@ -196,7 +193,7 @@ class BeatmapsetModel(DatabaseModel[BeatmapsetDict]):
 
     @staticmethod
     def _fallback_covers() -> BeatmapCovers:
-        fallback_base = "https://assets.ppy.sh/beatmaps/0/covers"
+        fallback_base = "https://lazer.shikkesora.com/beatmapsets/0/covers"
         return {
             "cover": f"{fallback_base}/cover.jpg",
             "card": f"{fallback_base}/card.jpg",
