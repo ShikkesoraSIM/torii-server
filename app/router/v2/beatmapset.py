@@ -1319,6 +1319,19 @@ _ALLOWED_COVER_FILES = {
     "slimcover@2x.jpg",
 }
 
+_cover_http_client: httpx.AsyncClient | None = None
+
+
+def _get_cover_http_client() -> httpx.AsyncClient:
+    global _cover_http_client
+    if _cover_http_client is None or _cover_http_client.is_closed:
+        _cover_http_client = httpx.AsyncClient(
+            timeout=10.0,
+            follow_redirects=True,
+            limits=httpx.Limits(max_connections=64, max_keepalive_connections=32),
+        )
+    return _cover_http_client
+
 
 @router.get("/beatmapsets/{beatmapset_id}/covers/{filename}", tags=["谱面集"])
 async def proxy_beatmapset_cover(
@@ -1351,27 +1364,27 @@ async def proxy_beatmapset_cover(
         f"https://assets.ppy.sh/beatmaps/{beatmapset_id}/covers/{clean_name}",
         f"https://cdn.sayobot.cn:25225/beatmaps/{beatmapset_id}/covers/cover.jpg",
     ]
-    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-        for url in candidates:
-            try:
-                resp = await client.get(url)
-                if resp.status_code != 200 or not resp.content:
-                    continue
-                ctype = (resp.headers.get("content-type") or "").lower()
-                # Descartar el avatar default gris de 2344 bytes si alguna CDN lo devuelve.
-                if len(resp.content) < 4096 and "png" in ctype:
-                    continue
-                media = ctype.split(";")[0] if ctype.startswith("image/") else "image/jpeg"
-                try:
-                    await redis_bin.setex(cache_key, 604800, resp.content)
-                except Exception:
-                    pass
-                return Response(
-                    content=resp.content,
-                    media_type=media,
-                    headers={"Cache-Control": "public, max-age=604800"},
-                )
-            except Exception:
+    client = _get_cover_http_client()
+    for url in candidates:
+        try:
+            resp = await client.get(url)
+            if resp.status_code != 200 or not resp.content:
                 continue
+            ctype = (resp.headers.get("content-type") or "").lower()
+            # Descartar el avatar default gris de 2344 bytes si alguna CDN lo devuelve.
+            if len(resp.content) < 4096 and "png" in ctype:
+                continue
+            media = ctype.split(";")[0] if ctype.startswith("image/") else "image/jpeg"
+            try:
+                await redis_bin.setex(cache_key, 604800, resp.content)
+            except Exception:
+                pass
+            return Response(
+                content=resp.content,
+                media_type=media,
+                headers={"Cache-Control": "public, max-age=604800"},
+            )
+        except Exception:
+            continue
 
     raise HTTPException(status_code=404, detail="Cover not found")
