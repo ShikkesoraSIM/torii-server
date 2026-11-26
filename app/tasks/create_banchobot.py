@@ -18,7 +18,7 @@ async def create_banchobot():
                 is_bot=True,
                 pw_bcrypt="0",
                 id=BANCHOBOT_ID,
-                avatar_url="https://a.ppy.sh/3",
+                avatar_url="",
                 country_code="SH",
                 website="https://twitter.com/banchoboat",
             )
