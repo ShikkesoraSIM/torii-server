@@ -620,7 +620,8 @@
           "RP",
           "AS",
           "TD",
-          "HS"
+          "HS",
+          "VR"
         ],
         "RequiresConfiguration": false,
         "UserPlayable": false,
@@ -651,7 +652,8 @@
           "RP",
           "AS",
           "TD",
-          "HS"
+          "HS",
+          "VR"
         ],
         "RequiresConfiguration": false,
         "UserPlayable": false,
@@ -1433,6 +1435,23 @@
         "ValidForFreestyleAsRequiredMod": false,
         "ValidForMultiplayerAsFreeMod": true,
         "AlwaysValidForSubmission": false
+      },
+      {
+        "Acronym": "VR",
+        "Name": "VR",
+        "Description": "Automatically applied to plays made with VR controllers.",
+        "Type": "System",
+        "Settings": [],
+        "IncompatibleMods": [
+          "AT",
+          "CN"
+        ],
+        "RequiresConfiguration": false,
+        "UserPlayable": true,
+        "ValidForMultiplayer": false,
+        "ValidForFreestyleAsRequiredMod": false,
+        "ValidForMultiplayerAsFreeMod": false,
+        "AlwaysValidForSubmission": true
       }
     ]
   },
