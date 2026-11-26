@@ -21,7 +21,7 @@ from app.database import (
 )
 from app.dependencies.beatmap_download import DownloadService
 from app.dependencies.cache import BeatmapsetCacheService, UserCacheService
-from app.dependencies.database import Database, Redis, with_db
+from app.dependencies.database import Database, Redis, get_redis_binary, with_db
 from app.dependencies.fetcher import Fetcher
 from app.dependencies.geoip import IPAddress, get_geoip_helper
 from app.dependencies.storage import StorageService
@@ -36,6 +36,7 @@ from .router import router
 
 from fastapi import (
     BackgroundTasks,
+    Depends,
     Form,
     HTTPException,
     Path,
@@ -43,7 +44,7 @@ from fastapi import (
     Request,
     Security,
 )
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 import httpx
 from httpx import HTTPError
 from sqlalchemy import and_, func, or_
@@ -1305,3 +1306,72 @@ async def favourite_beatmapset(
         await db.delete(existing_favourite)
     await cache_service.invalidate_user_beatmapsets_cache(current_user.id)
     await db.commit()
+
+
+_ALLOWED_COVER_FILES = {
+    "cover.jpg",
+    "cover@2x.jpg",
+    "card.jpg",
+    "card@2x.jpg",
+    "list.jpg",
+    "list@2x.jpg",
+    "slimcover.jpg",
+    "slimcover@2x.jpg",
+}
+
+
+@router.get("/beatmapsets/{beatmapset_id}/covers/{filename}", tags=["谱面集"])
+async def proxy_beatmapset_cover(
+    beatmapset_id: Annotated[int, Path(ge=0)],
+    filename: str,
+    redis_bin=Depends(get_redis_binary),
+):
+    """Proxy server-side de portadas con cache en Redis, evitando el placeholder de 2344 bytes."""
+    clean_name = filename.split("?", 1)[0]
+    for extra in (".png", ".jpg"):
+        if clean_name.endswith(f".jpg{extra}"):
+            clean_name = clean_name[: -len(extra)]
+            break
+    if clean_name not in _ALLOWED_COVER_FILES:
+        raise HTTPException(status_code=404, detail="Invalid cover variant")
+
+    cache_key = f"cover:{beatmapset_id}:{clean_name}"
+    try:
+        cached = await redis_bin.get(cache_key)
+        if cached:
+            return Response(
+                content=cached,
+                media_type="image/jpeg",
+                headers={"Cache-Control": "public, max-age=604800"},
+            )
+    except Exception:
+        pass
+
+    candidates = [
+        f"https://assets.ppy.sh/beatmaps/{beatmapset_id}/covers/{clean_name}",
+        f"https://cdn.sayobot.cn:25225/beatmaps/{beatmapset_id}/covers/cover.jpg",
+    ]
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        for url in candidates:
+            try:
+                resp = await client.get(url)
+                if resp.status_code != 200 or not resp.content:
+                    continue
+                ctype = (resp.headers.get("content-type") or "").lower()
+                # Descartar el avatar default gris de 2344 bytes si alguna CDN lo devuelve.
+                if len(resp.content) < 4096 and "png" in ctype:
+                    continue
+                media = ctype.split(";")[0] if ctype.startswith("image/") else "image/jpeg"
+                try:
+                    await redis_bin.setex(cache_key, 604800, resp.content)
+                except Exception:
+                    pass
+                return Response(
+                    content=resp.content,
+                    media_type=media,
+                    headers={"Cache-Control": "public, max-age=604800"},
+                )
+            except Exception:
+                continue
+
+    raise HTTPException(status_code=404, detail="Cover not found")

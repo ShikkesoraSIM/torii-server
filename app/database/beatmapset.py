@@ -55,12 +55,12 @@ def _otra_resolucion(url: str, *, retina: bool) -> str | None:
 
 
 def _proxy_cover_url(url: str) -> str:
-    """Reescribe URLs de covers de assets.ppy.sh al proxy propio en lazer.shikkesora.com."""
+    """Reescribe URLs de covers de assets.ppy.sh al proxy propio en lazer-api.shikkesora.com."""
     if not isinstance(url, str):
         return url
     prefix = "https://assets.ppy.sh/beatmaps/"
     if url.startswith(prefix):
-        return "https://lazer.shikkesora.com/beatmapsets/" + url[len(prefix):]
+        return "https://lazer-api.shikkesora.com/api/v2/beatmapsets/" + url[len(prefix):]
     return url
 
 
@@ -193,7 +193,7 @@ class BeatmapsetModel(DatabaseModel[BeatmapsetDict]):
 
     @staticmethod
     def _fallback_covers() -> BeatmapCovers:
-        fallback_base = "https://lazer.shikkesora.com/beatmapsets/0/covers"
+        fallback_base = "https://lazer-api.shikkesora.com/api/v2/beatmapsets/0/covers"
         return {
             "cover": f"{fallback_base}/cover.jpg",
             "card": f"{fallback_base}/card.jpg",
