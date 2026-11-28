@@ -38,20 +38,20 @@ async def process_streak(
 MEDALS = {
     Achievement(
         id=102,
-        name="Daily Sprout",
-        desc="Ready for anything.",
-        assets_id="all-skill-dc-1",
+        name='First Seed',
+        desc='Day one at the shrine.',
+        assets_id='all-skill-dc-1',
     ): partial(process_streak, 1, 7),
     Achievement(
         id=103,
-        name="Weekly Sapling",
-        desc="Circadian rhythm calibrated.",
-        assets_id="all-skill-dc-7",
+        name='Growing Branch',
+        desc='Seven days of steady rhythm.',
+        assets_id='all-skill-dc-7',
     ): partial(process_streak, 7, 30),
     Achievement(
         id=104,
-        name="Monthly Shrub",
-        desc="In for the grind.",
-        assets_id="all-skill-dc-30",
+        name='Shrine Canopy',
+        desc='Thirty days rooted in the dojo.',
+        assets_id='all-skill-dc-30',
     ): partial(process_streak, 30, 0),
 }

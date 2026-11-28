@@ -96,8 +96,10 @@ from .torii_score_note import ToriiScoreNote
 from .team import Team, TeamMember, TeamRequest, TeamResp
 from .torii_gifts import ToriiGift
 from .torii_hiccup_report import ToriiHiccupReport
+from .torii_settings_telemetry import ToriiSettingsTelemetry
 from .torii_points import ToriiAccessCode, ToriiAccessCodeRedemption, ToriiPointTransaction
 from .torii_store import ToriiOwnedCosmetic, ToriiStoreConfig
+from .torii_sub_profile import ToriiSubProfile
 from .total_score_best_scores import TotalScoreBestScore
 from .user import (
     User,
@@ -189,6 +191,8 @@ __all__ = [
     "ToriiReplayRender",
     "ToriiMapperatorinatorPreset",
     "ToriiScoreNote",
+    "ToriiSettingsTelemetry",
+    "ToriiSubProfile",
     "Team",
     "TeamMember",
     "TeamRequest",

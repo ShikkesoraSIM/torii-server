@@ -187,7 +187,7 @@ class UserDict(TypedDict):
 
 class UserModel(DatabaseModel[UserDict]):
     DEFAULT_AVATAR_URL: ClassVar[str] = "https://lazer-data.g0v0.top/default.jpg"
-    DEFAULT_COVER_URL: ClassVar[str] = "https://assets.ppy.sh/user-profile-covers/default.jpeg"
+    DEFAULT_COVER_URL: ClassVar[str] = "https://lazer.shikkesora.com/image/backgrounds/bgcover.jpg"
 
     # Torii ships its own default avatar set (storage/avatars/default-1..N.png).
     # A user without an uploaded avatar gets a stable pick from the set: varied
@@ -1138,7 +1138,22 @@ class User(AsyncAttrs, UserModel, table=True):
 
     async def is_restricted(self, session: AsyncSession) -> bool:
         active_restrictions = (await session.exec(select(self.is_restricted_query(self.id)))).first()
-        return active_restrictions or False
+        if active_restrictions:
+            return True
+
+        # Cascade restriction if this user is a persona sub-profile of a restricted master
+        from app.database.torii_sub_profile import ToriiSubProfile
+        sub_profile = (
+            await session.exec(
+                select(ToriiSubProfile.master_user_id).where(ToriiSubProfile.profile_user_id == self.id)
+            )
+        ).first()
+        if sub_profile:
+            master_restricted = (await session.exec(select(self.is_restricted_query(sub_profile)))).first()
+            if master_restricted:
+                return True
+
+        return False
 
 
 # 为了向后兼容，在 SQL 查询中使用 User

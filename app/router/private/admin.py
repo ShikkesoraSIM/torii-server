@@ -287,7 +287,8 @@ async def _evict_user_from_live_services(session: Database, redis: Redis, user: 
             pass
 
     try:
-        await server.disconnect(user, session)
+        # torii: disconnect ahora toma user_id (no el objeto User) para evitar DetachedInstanceError.
+        await server.disconnect(user_id, session)
     except Exception as e:
         logger.debug(f"Failed to disconnect restricted user {user_id} from notification server: {e}")
 
@@ -4245,3 +4246,118 @@ async def revoke_profile_media(
     await session.refresh(review)
 
     return _pmr_to_admin_resp(review, user.username if user else None)
+
+
+class TelemetryBucketItem(BaseModel):
+    value: str
+    count: int
+    percent: float
+
+
+class TelemetryBoolStat(BaseModel):
+    enabled: int
+    total: int
+    percent: float
+
+
+class AdminSettingsTelemetrySummaryResp(BaseModel):
+    window_days: int
+    stream: str | None = None
+    total_installs: int
+    by_stream: list[TelemetryBucketItem]
+    by_platform: list[TelemetryBucketItem]
+    by_version: list[TelemetryBucketItem]
+    by_ui_theme: list[TelemetryBucketItem]
+    by_renderer: list[TelemetryBucketItem]
+    by_audio_mode: list[TelemetryBucketItem]
+    booleans: dict[str, TelemetryBoolStat]
+    enums: dict[str, list[TelemetryBucketItem]]
+
+
+@router.get(
+    "/admin/telemetry/settings",
+    name="Aggregated anonymous Torii client settings telemetry",
+    tags=["管理", "g0v0 API"],
+    response_model=AdminSettingsTelemetrySummaryResp,
+)
+async def get_settings_telemetry_summary(
+    session: Database,
+    user_and_token: Annotated[UserAndToken, Security(get_client_user_and_token)],
+    days: int = Query(default=30, ge=1, le=365),
+    stream: str | None = Query(default=None, max_length=24),
+):
+    await require_admin(session, user_and_token)
+
+    from app.database.torii_settings_telemetry import ToriiSettingsTelemetry
+
+    cutoff = utcnow() - timedelta(days=days)
+    stmt = select(ToriiSettingsTelemetry).where(col(ToriiSettingsTelemetry.updated_at) >= cutoff)
+    if stream:
+        stmt = stmt.where(col(ToriiSettingsTelemetry.stream) == stream)
+
+    rows = (await session.exec(stmt)).all()
+    total = len(rows)
+
+    def _pct(n: int, denom: int) -> float:
+        return round((n * 100.0) / denom, 2) if denom > 0 else 0.0
+
+    def _bucket(values: list[str | None]) -> list[TelemetryBucketItem]:
+        counts: dict[str, int] = {}
+        for v in values:
+            key = v if v else "unknown"
+            counts[key] = counts.get(key, 0) + 1
+        return [
+            TelemetryBucketItem(value=k, count=c, percent=_pct(c, total))
+            for k, c in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        ]
+
+    bool_counts: dict[str, list[int]] = {}
+    enum_counts: dict[str, dict[str, int]] = {}
+
+    def _record_bool(name: str, val: bool):
+        pair = bool_counts.setdefault(name, [0, 0])
+        pair[1] += 1
+        if val:
+            pair[0] += 1
+
+    for r in rows:
+        _record_bool("classic_enabled", bool(r.classic_enabled))
+        _record_bool("nsfw_enabled", bool(r.nsfw_enabled))
+        _record_bool("open_folders_skins", bool(r.open_folders_skins))
+        _record_bool("open_folders_songs", bool(r.open_folders_songs))
+        _record_bool("potato_mode", bool(r.potato_mode))
+        _record_bool("lightweight_interface", bool(r.lightweight_interface))
+
+        bag = r.settings_json if isinstance(r.settings_json, dict) else {}
+        for k, val in bag.items():
+            if isinstance(val, bool):
+                _record_bool(k, val)
+            elif isinstance(val, str):
+                bucket = enum_counts.setdefault(k, {})
+                bucket[val] = bucket.get(val, 0) + 1
+
+    booleans = {
+        k: TelemetryBoolStat(enabled=pair[0], total=pair[1], percent=_pct(pair[0], pair[1]))
+        for k, pair in sorted(bool_counts.items())
+    }
+    enums = {
+        k: [
+            TelemetryBucketItem(value=v, count=c, percent=_pct(c, sum(b.values())))
+            for v, c in sorted(b.items(), key=lambda kv: (-kv[1], kv[0]))
+        ]
+        for k, b in sorted(enum_counts.items())
+    }
+
+    return AdminSettingsTelemetrySummaryResp(
+        window_days=days,
+        stream=stream,
+        total_installs=total,
+        by_stream=_bucket([r.stream for r in rows]),
+        by_platform=_bucket([r.platform for r in rows]),
+        by_version=_bucket([r.app_version for r in rows]),
+        by_ui_theme=_bucket([r.ui_theme for r in rows]),
+        by_renderer=_bucket([r.renderer for r in rows]),
+        by_audio_mode=_bucket([r.audio_mode for r in rows]),
+        booleans=booleans,
+        enums=enums,
+    )

@@ -661,6 +661,14 @@ class Beatmap(AsyncAttrs, BeatmapModel, table=True):
             # 3. If API fetch fails, re-check DB in case it was created concurrently
             from app.log import logger
             logger.warning(f"Failed to fetch beatmap {bid or md5} from API: {e}")
+            # torii: si el fallo fue un INSERT con PK duplicada (otra request inserto el MISMO
+            # beatmap concurrentemente), la session quedo con la transaccion rota y la re-query de
+            # abajo tiraba PendingRollbackError. Rollback primero: descarta la transaccion muerta y
+            # deja re-consultar la fila que ya inserto la otra request.
+            try:
+                await session.rollback()
+            except Exception:
+                pass
             beatmap = (await session.exec(stmt)).first()
             if beatmap:
                 return beatmap

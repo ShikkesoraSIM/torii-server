@@ -57,6 +57,7 @@ from sqlmodel import select
 
 from app.config import settings
 from app.database import Beatmap, Beatmapset, Score, ToriiReplayRender, User
+from app.models.score import GameMode
 from app.dependencies.database import Database, Redis
 from app.dependencies.storage import StorageService
 from app.dependencies.user import get_current_user
@@ -348,6 +349,19 @@ async def submit_replay_render(
         raise HTTPException(status_code=404, detail="Score not found")
     if not score.replay_filename:
         raise HTTPException(status_code=404, detail="This score has no replay to render")
+
+    # torii: o!rdr solo renderiza osu!standard. Si el score es mania/taiko/catch cortamos ACA con
+    # un 422 (limitacion del render = error del cliente) ANTES de gastar el cooldown + una llamada
+    # a o!rdr que devolvia un 502 y ademas ensuciaba Sentry. RX/AP siguen siendo osu base (renderean).
+    try:
+        base_mode = score.gamemode.to_base_ruleset()
+    except Exception:
+        base_mode = None
+    if base_mode is not None and base_mode != GameMode.OSU:
+        raise HTTPException(
+            status_code=422,
+            detail="o!rdr only supports osu!standard replays (no mania, taiko, or catch).",
+        )
 
     if resolution not in _ALL_RESOLUTIONS:
         raise HTTPException(status_code=400, detail=f"Unsupported resolution: {resolution}")

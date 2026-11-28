@@ -26,26 +26,26 @@ async def process_combo(
 MEDALS: Medals = {
     Achievement(
         id=21,
-        name="500 Combo",
-        desc="500 big ones! You''re moving up in the world!",
-        assets_id="osu-combo-500",
+        name='500x Spark',
+        desc='500 hits linked without breaking stride.',
+        assets_id='osu-combo-500',
     ): partial(process_combo, 500, 750),
     Achievement(
         id=22,
-        name="750 Combo",
-        desc="750 notes back to back? Woah.",
-        assets_id="osu-combo-750",
+        name='750x Surge',
+        desc='750 notes chained in clean rhythm.',
+        assets_id='osu-combo-750',
     ): partial(process_combo, 750, 1000),
     Achievement(
         id=23,
-        name="1000 Combo",
-        desc="A thousand reasons why you rock at this game.",
-        assets_id="osu-combo-1000",
+        name='1000x Storm',
+        desc='A thousand consecutive hits.',
+        assets_id='osu-combo-1000',
     ): partial(process_combo, 1000, 2000),
     Achievement(
         id=24,
-        name="2000 Combo",
-        desc="Nothing can stop you now.",
-        assets_id="osu-combo-2000",
+        name='2000x Thunder',
+        desc='Two thousand hits without a single miss.',
+        assets_id='osu-combo-2000',
     ): partial(process_combo, 2000, 0),
 }

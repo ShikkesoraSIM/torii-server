@@ -21,7 +21,9 @@ from . import (  # noqa: F401
     torii_score_note,
     torii_restriction,
     torii_server_pulse,
+    torii_settings_telemetry,
     torii_store,
+    torii_sub_profiles,
     user,
 )
 from .router import router as api_v2_router

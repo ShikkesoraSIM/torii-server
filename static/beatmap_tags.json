@@ -33,7 +33,7 @@
     "id": 6,
     "name": "geometric/grid snap",
     "ruleset_id": 0,
-    "description": "Objects are placed along a square grid, typically using osu!'s in-built grid snap feature."
+    "description": "Objects are placed along a square grid, typically using Torii's in-built grid snap feature."
   },
   {
     "id": 7,
@@ -471,7 +471,7 @@
     "id": 84,
     "name": "style/taikosu",
     "ruleset_id": 1,
-    "description": "A map designed with both osu! and osu!taiko in mind."
+    "description": "A map designed with both Torii and Torii Drums in mind."
   },
   {
     "id": 85,
@@ -495,7 +495,7 @@
     "id": 88,
     "name": "style/convert",
     "ruleset_id": 1,
-    "description": "A map that imitates the converted maps from osu!."
+    "description": "A map that imitates the converted maps from Torii."
   },
   {
     "id": 89,
@@ -549,7 +549,7 @@
     "id": 97,
     "name": "style/convert",
     "ruleset_id": 2,
-    "description": "A map that imitates the converted maps from osu!, where the structure and distances are irregular."
+    "description": "A map that imitates the converted maps from Torii, where the structure and distances are irregular."
   },
   {
     "id": 98,

@@ -793,7 +793,7 @@ async def get_user_scores(
         Literal["best", "recent", "firsts", "pinned"],
         Path(description=("æˆç»©ç±»åž‹: best æœ€å¥½æˆç»© / recent æœ€è¿‘ 24h æ¸¸çŽ©æˆç»© / firsts ç¬¬ä¸€åæˆç»© / pinned ç½®é¡¶æˆç»©")),
     ],
-    current_user: Annotated[User, Security(get_current_user, scopes=["public"])],
+    current_user: User | None = Security(get_optional_user, scopes=["public"]),
     legacy_only: Annotated[bool, Query(description="æ˜¯å¦åªæŸ¥è¯¢ Stable æˆç»©")] = False,
     include_fails: Annotated[bool, Query(description="æ˜¯å¦åŒ…å«å¤±è´¥çš„æˆç»©")] = False,
     mode: Annotated[GameMode | None, Query(description="æŒ‡å®š ruleset (å¯é€‰ï¼Œé»˜è®¤ä¸ºç”¨æˆ·ä¸»æ¨¡å¼)")] = None,

@@ -48,8 +48,11 @@ class ChatServer:
     def get_user_joined_channel(self, user_id: int) -> list[int]:
         return [channel_id for channel_id, users in self.channels.items() if user_id in users]
 
-    async def disconnect(self, user: User, session: AsyncSession, client: WebSocket | None = None):
-        user_id = user.id
+    async def disconnect(self, user_id: int, session: AsyncSession, client: WebSocket | None = None):
+        # torii: recibe user_id (no el objeto User). El caller del WS lo llama desde el `finally`,
+        # cuando la session del handler ya se cerro y el User quedaria DETACHED -> leer user.id
+        # tiraba DetachedInstanceError. Si hay que limpiar channels, recargamos el User bindeado a
+        # ESTA session mas abajo (leave_channel necesita atributos vivos del User).
 
         # remove only the disconnected websocket (if provided)
         if client is not None:
@@ -72,9 +75,20 @@ class ChatServer:
             if user_id in channel:
                 channel_ids_to_process.append(channel_id)
 
+        if not channel_ids_to_process:
+            return
+
+        # recargar el User bindeado a la session de cleanup (evita DetachedInstanceError).
+        user = await session.get(User, user_id)
+
         for channel_id in channel_ids_to_process:
             if channel_id in self.channels and user_id in self.channels[channel_id]:
                 self.channels[channel_id].remove(user_id)
+
+                if user is None:
+                    # el user ya no existe en DB; alcanza con sacarlo de los channels en memoria.
+                    continue
+
                 db_channel = (
                     await session.exec(select(ChatChannel).where(ChatChannel.channel_id == channel_id))
                 ).first()
@@ -475,7 +489,9 @@ async def chat_websocket(
         if user is not None:
             try:
                 # Fresh session for cleanup so the pool is not double-held.
+                # torii: pasamos user_id (int), NO el objeto User: aca arriba la session del handler
+                # ya se cerro y el User quedo detached; disconnect recarga el User si lo necesita.
                 async with AsyncSession(engine) as cleanup_session:
-                    await server.disconnect(user, cleanup_session, websocket)
+                    await server.disconnect(user_id, cleanup_session, websocket)
             except Exception:
                 logger.exception(f"Cleanup failed for client {user_id}")

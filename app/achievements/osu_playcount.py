@@ -39,26 +39,26 @@ async def process_playcount(
 MEDALS: Medals = {
     Achievement(
         id=73,
-        name="5,000 Plays",
-        desc="There's a lot more where that came from",
-        assets_id="osu-plays-5000",
+        name='5,000 Runs',
+        desc='Five thousand journeys through the shrine.',
+        assets_id='osu-plays-5000',
     ): partial(process_playcount, 5000, 15000),
     Achievement(
         id=74,
-        name="15,000 Plays",
-        desc="Must.. click.. circles..",
-        assets_id="osu-plays-15000",
+        name='15,000 Runs',
+        desc='Fifteen thousand plays logged.',
+        assets_id='osu-plays-15000',
     ): partial(process_playcount, 15000, 25000),
     Achievement(
         id=75,
-        name="25,000 Plays",
-        desc="There's no going back.",
-        assets_id="osu-plays-25000",
+        name='25,000 Runs',
+        desc='Twenty-five thousand clears and retries.',
+        assets_id='osu-plays-25000',
     ): partial(process_playcount, 25000, 50000),
     Achievement(
         id=76,
-        name="50,000 Plays",
-        desc="You're here forever.",
-        assets_id="osu-plays-50000",
+        name='50,000 Runs',
+        desc='Fifty thousand plays — true dedication.',
+        assets_id='osu-plays-50000',
     ): partial(process_playcount, 50000, 0),
 }
