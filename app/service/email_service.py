@@ -94,13 +94,13 @@ class EmailService:
 <body>
     <div class="container">
         <div class="header">
-            <h1>osu! 邮箱验证</h1>
+            <h1>Torii 邮箱验证</h1>
             <p>Email Verification</p>
         </div>
 
         <div class="content">
             <h2>你好 {username}！</h2>
-            <p>感谢你注册我们的 osu! 服务器。为了完成账户验证，请输入以下验证码：</p>
+            <p>感谢你注册 Torii 服务器。为了完成账户验证，请输入以下验证码：</p>
 
             <div class="code">{code}</div>
 
@@ -120,7 +120,7 @@ class EmailService:
             <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
 
             <h3>Hello {username}!</h3>
-            <p>Thank you for registering on our osu! server. To complete your account verification, please enter the following verification code:</p>
+            <p>Thank you for registering on Torii. To complete your account verification, please enter the following verification code:</p>
 
             <p>This verification code will expire in <strong>10 minutes</strong>.</p>
 

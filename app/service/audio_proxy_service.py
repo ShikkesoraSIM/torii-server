@@ -101,7 +101,7 @@ class AudioProxyService:
                 ) from e
         except httpx.RequestError as e:
             logger.error(f"Request error fetching beatmapset audio for ID {beatmapset_id}: {e}")
-            raise HTTPException(status_code=503, detail="Failed to connect to osu! servers") from e
+            raise HTTPException(status_code=503, detail="Failed to connect to upstream audio mirror") from e
         except Exception as e:
             logger.error(f"Unexpected error fetching beatmapset audio for ID {beatmapset_id}: {e}")
             raise HTTPException(status_code=500, detail="Internal server error while fetching audio") from e

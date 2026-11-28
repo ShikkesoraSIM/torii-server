@@ -1316,7 +1316,7 @@
       {
         "Acronym": "SV2",
         "Name": "Score V2",
-        "Description": "Score set on earlier osu! versions with the V2 scoring algorithm active.",
+        "Description": "Score set on earlier client versions with the V2 scoring algorithm active.",
         "Type": "System",
         "Settings": [],
         "IncompatibleMods": [],
@@ -2151,7 +2151,7 @@
       {
         "Acronym": "SV2",
         "Name": "Score V2",
-        "Description": "Score set on earlier osu! versions with the V2 scoring algorithm active.",
+        "Description": "Score set on earlier client versions with the V2 scoring algorithm active.",
         "Type": "System",
         "Settings": [],
         "IncompatibleMods": [],
@@ -2830,7 +2830,7 @@
       {
         "Acronym": "SV2",
         "Name": "Score V2",
-        "Description": "Score set on earlier osu! versions with the V2 scoring algorithm active.",
+        "Description": "Score set on earlier client versions with the V2 scoring algorithm active.",
         "Type": "System",
         "Settings": [],
         "IncompatibleMods": [],
@@ -3863,7 +3863,7 @@
       {
         "Acronym": "SV2",
         "Name": "Score V2",
-        "Description": "Score set on earlier osu! versions with the V2 scoring algorithm active.",
+        "Description": "Score set on earlier client versions with the V2 scoring algorithm active.",
         "Type": "System",
         "Settings": [],
         "IncompatibleMods": [],

@@ -60,7 +60,7 @@ class RegisterHashesRequest(BaseModel):
     version: str
     """Semver version string, e.g. '2026.427.1-lazer'."""
 
-    client_name: str = "osu! Torii"
+    client_name: str = "Torii"
     """Human-readable client name shown in the admin panel and score history."""
 
     hashes: dict[str, str]
